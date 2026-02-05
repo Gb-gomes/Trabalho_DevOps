@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: ["master"] 
+    branches: ["master"]
   pull_request:
     branches: ["master"]
   workflow_dispatch:
@@ -11,7 +11,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  checks: write 
+  checks: write
 
 concurrency:
   group: "pages"
@@ -24,28 +24,23 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      
       - name: Verificar existência do index.html
         run: |
           if [ ! -f "./index.html" ]; then
             echo "ERRO CRÍTICO: O arquivo 'index.html' não foi encontrado na raiz!"
             exit 1
           fi
-          echo "Sucesso: index.html encontrado."
 
-      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
-      
+
       - name: Instalar e Rodar Linter HTML
         run: |
           npm install -g htmlhint
           htmlhint "**/*.html"
 
-      
       - name: Verificar tamanho dos arquivos (>500KB)
         run: |
           large_files=$(find . -type f -size +500k -not -path '*/.git/*')
@@ -62,17 +57,28 @@ jobs:
             exit 1
           fi
 
-      # Verificação de Links e Imagens
       - name: Verificar Links e Imagens (Lychee)
         uses: lycheeverse/lychee-action@v1.9.0
         with:
           fail: true
           args: --verbose --no-progress './**/*.html'
 
-  # ENTREGA CONTÍNUA (CD)
+      - name: Enviar E-mail de Falha (Quality Check)
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: 🚨 FALHA no Quality Check - ${{ github.repository }}
+          body: A verificação de qualidade falhou. Verifique os logs no GitHub Actions.
+          to: seu-email@exemplo.com 
+          from: GitHub Actions Bot
+
   deploy:
     needs: quality-check
-   
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     
     environment:
@@ -96,3 +102,30 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Enviar E-mail de Sucesso
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: ✅ SUCESSO - Deploy realizado - ${{ github.repository }}
+          body: O site foi atualizado com sucesso e está no ar!
+          to: seu-email@exemplo.com 
+          from: GitHub Actions Bot
+
+      - name: Enviar E-mail de Falha no Deploy
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: 🔥 ERRO CRÍTICO - Falha no Deploy - ${{ github.repository }}
+          body: Ocorreu um erro ao tentar publicar no GitHub Pages.
+          to: seu-email@exemplo.com 
+          from: GitHub Actions Bot

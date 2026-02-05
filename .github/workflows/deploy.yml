@@ -1,0 +1,98 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ["master"] 
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  checks: write 
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      
+      - name: Verificar existência do index.html
+        run: |
+          if [ ! -f "./index.html" ]; then
+            echo "ERRO CRÍTICO: O arquivo 'index.html' não foi encontrado na raiz!"
+            exit 1
+          fi
+          echo "Sucesso: index.html encontrado."
+
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      
+      - name: Instalar e Rodar Linter HTML
+        run: |
+          npm install -g htmlhint
+          htmlhint "**/*.html"
+
+      
+      - name: Verificar tamanho dos arquivos (>500KB)
+        run: |
+          large_files=$(find . -type f -size +500k -not -path '*/.git/*')
+          if [ -n "$large_files" ]; then
+            echo "ERRO: Arquivos excedendo 500KB encontrados:"
+            echo "$large_files"
+            exit 1
+          fi
+
+      - name: Buscar termos proibidos ou sensíveis
+        run: |
+          if grep -rniE "TODO|FIXME|senha|password" --exclude-dir={.git,.github} .; then
+            echo "ERRO: Termos proibidos encontrados no código!"
+            exit 1
+          fi
+
+      # Verificação de Links e Imagens
+      - name: Verificar Links e Imagens (Lychee)
+        uses: lycheeverse/lychee-action@v1.9.0
+        with:
+          fail: true
+          args: --verbose --no-progress './**/*.html'
+
+  # ENTREGA CONTÍNUA (CD)
+  deploy:
+    needs: quality-check
+   
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

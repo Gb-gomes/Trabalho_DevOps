@@ -1,8 +1,10 @@
 name: CI/CD Pipeline
 
 on:
+  # Etapa 2: Dispara deploy automático na master
   push:
-    branches: ["master"]
+    branches: ["master"] 
+  # Etapa 1: Dispara validação em Pull Requests para a master
   pull_request:
     branches: ["master"]
   workflow_dispatch:
@@ -11,36 +13,42 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  checks: write
+  checks: write 
 
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
+  # --- ETAPA 1: INTEGRAÇÃO CONTÍNUA (CI) ---
   quality-check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
+      # 1. Verificação obrigatória do index.html
       - name: Verificar existência do index.html
         run: |
           if [ ! -f "./index.html" ]; then
             echo "ERRO CRÍTICO: O arquivo 'index.html' não foi encontrado na raiz!"
             exit 1
           fi
+          echo "Sucesso: index.html encontrado."
 
+      # 2. Setup do Node para rodar o Linter
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
+      
+      # 3. Execução do Linter (HTMLHint)
       - name: Instalar e Rodar Linter HTML
         run: |
           npm install -g htmlhint
           htmlhint "**/*.html"
 
+      # 4. Bloqueio de arquivos maiores que 500KB
       - name: Verificar tamanho dos arquivos (>500KB)
         run: |
           large_files=$(find . -type f -size +500k -not -path '*/.git/*')
@@ -50,6 +58,7 @@ jobs:
             exit 1
           fi
 
+      # 5. Varredura de termos proibidos
       - name: Buscar termos proibidos ou sensíveis
         run: |
           if grep -rniE "TODO|FIXME|senha|password" --exclude-dir={.git,.github} .; then
@@ -57,28 +66,17 @@ jobs:
             exit 1
           fi
 
+      # 6. Verificação de Links e Imagens
       - name: Verificar Links e Imagens (Lychee)
         uses: lycheeverse/lychee-action@v1.9.0
         with:
           fail: true
           args: --verbose --no-progress './**/*.html'
 
-      - name: Enviar E-mail de Falha (Quality Check)
-        if: failure()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: 🚨 FALHA no Quality Check - ${{ github.repository }}
-          body: A verificação de qualidade falhou. Verifique os logs no GitHub Actions.
-          to: seu-email@exemplo.com 
-          from: GitHub Actions Bot
-
+  # --- ETAPA 2: ENTREGA CONTÍNUA (CD) ---
   deploy:
     needs: quality-check
+    # Atualizado para master aqui também:
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     
     environment:
@@ -102,30 +100,7 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-      - name: Enviar E-mail de Sucesso
-        if: success()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: ✅ SUCESSO - Deploy realizado - ${{ github.repository }}
-          body: O site foi atualizado com sucesso e está no ar!
-          to: gabrielgomesduarte020@gmail.com 
-          from: GitHub Actions Bot
 
-      - name: Enviar E-mail de Falha no Deploy
+      - name: Check Status
         if: failure()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          secure: true
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: 🔥 ERRO CRÍTICO - Falha no Deploy - ${{ github.repository }}
-          body: Ocorreu um erro ao tentar publicar no GitHub Pages.
-          to: gabrielgomesduarte020@gmail.com 
-          from: GitHub Actions Bot
+        run: echo "Deployment falhou. Verifique os logs para detalhes."

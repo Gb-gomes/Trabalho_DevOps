@@ -113,7 +113,7 @@ jobs:
           password: ${{ secrets.MAIL_PASSWORD }}
           subject: ✅ SUCESSO - Deploy realizado - ${{ github.repository }}
           body: O site foi atualizado com sucesso e está no ar!
-          to: seu-email@exemplo.com 
+          to: gabrielgomesduarte020@gmail.com 
           from: GitHub Actions Bot
 
       - name: Enviar E-mail de Falha no Deploy
@@ -127,5 +127,5 @@ jobs:
           password: ${{ secrets.MAIL_PASSWORD }}
           subject: 🔥 ERRO CRÍTICO - Falha no Deploy - ${{ github.repository }}
           body: Ocorreu um erro ao tentar publicar no GitHub Pages.
-          to: seu-email@exemplo.com 
+          to: gabrielgomesduarte020@gmail.com 
           from: GitHub Actions Bot
